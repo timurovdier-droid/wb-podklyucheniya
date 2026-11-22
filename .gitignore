@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+env
+credentials.json
+data/
+*.sqlite
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vercel
+.cursor/
+agent-tools/
+*.log
+.DS_Store
