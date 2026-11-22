@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import os
 
 from aiogram import Bot
 from aiogram.types import InputMediaPhoto
@@ -20,6 +20,7 @@ async def deliver(bot: Bot, app: dict) -> bool:
         await sheets.append_application(app)
         return False
     album_ids: list[int] = []
+    ocr_task = asyncio.create_task(_enrich_ocr(bot, app))
     try:
         if app["kind"] == "ulanish":
             photos = app["photos"]
@@ -29,13 +30,15 @@ async def deliver(bot: Bot, app: dict) -> bool:
             album_ids.extend(
                 await _album(bot, settings.admin_chat_id, photos[7:], f"Ulanish {app['code']} — mashina")
             )
-        app = await _enrich_ocr(bot, app)
+        app = await ocr_task
         message = await bot.send_message(
             settings.admin_chat_id,
             admin_card(app),
             reply_markup=status_keyboard(app["id"], app.get("status") or "new"),
         )
     except Exception:
+        if not ocr_task.done():
+            ocr_task.cancel()
         log.exception("failed to deliver application %s", app["code"])
         return False
     await db.set_admin_message(app["id"], message.chat.id, message.message_id, album_ids)
@@ -49,8 +52,6 @@ async def deliver(bot: Bot, app: dict) -> bool:
 
 
 async def _enrich_ocr(bot: Bot, app: dict) -> dict:
-    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV"):
-        return app
     if not gemini_docs.enabled():
         return app
     extracted = await gemini_docs.extract_from_application(bot, app) or {}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from io import BytesIO
@@ -64,6 +65,10 @@ def enabled() -> bool:
     return bool(settings.gemini_api_key)
 
 
+def _on_vercel() -> bool:
+    return bool(os.getenv("VERCEL") or os.getenv("VERCEL_ENV"))
+
+
 def _models_to_try() -> list[str]:
     chain = [settings.gemini_model, *gemini_fallback_models()]
     seen: set[str] = set()
@@ -72,6 +77,8 @@ def _models_to_try() -> list[str]:
         if name not in seen:
             seen.add(name)
             out.append(name)
+    if _on_vercel():
+        return out[:2]
     return out
 
 
@@ -102,27 +109,29 @@ async def extract_from_application(bot: Bot, app: dict) -> dict[str, Any] | None
         }
 
 
+async def _download_one(bot: Bot, file_id: str) -> tuple[bytes, str] | None:
+    try:
+        tg_file = await bot.get_file(file_id)
+        if not tg_file.file_path:
+            return None
+        raw = await bot.download_file(tg_file.file_path)
+        if isinstance(raw, BytesIO):
+            data = raw.getvalue()
+        elif isinstance(raw, (bytes, bytearray)):
+            data = bytes(raw)
+        else:
+            data = raw.read()
+        if not data:
+            return None
+        return data, _guess_mime(tg_file.file_path)
+    except Exception:
+        log.exception("failed to download telegram photo %s", file_id)
+        return None
+
+
 async def _download_doc_photos(bot: Bot, file_ids: list[str]) -> list[tuple[bytes, str]]:
-    result: list[tuple[bytes, str]] = []
-    for file_id in file_ids:
-        try:
-            tg_file = await bot.get_file(file_id)
-            if not tg_file.file_path:
-                continue
-            raw = await bot.download_file(tg_file.file_path)
-            if isinstance(raw, BytesIO):
-                data = raw.getvalue()
-            elif isinstance(raw, (bytes, bytearray)):
-                data = bytes(raw)
-            else:
-                data = raw.read()
-            if not data:
-                continue
-            mime = _guess_mime(tg_file.file_path)
-            result.append((data, mime))
-        except Exception:
-            log.exception("failed to download telegram photo %s", file_id)
-    return result
+    downloaded = await asyncio.gather(*(_download_one(bot, file_id) for file_id in file_ids))
+    return [item for item in downloaded if item]
 
 
 def _guess_mime(path: str) -> str:
@@ -146,6 +155,7 @@ def _is_retryable(exc: Exception) -> bool:
 
 def _call_gemini(images: list[tuple[bytes, str]]) -> dict[str, Any] | None:
     client = _genai_client()
+    deadline = time.monotonic() + (40.0 if _on_vercel() else 120.0)
     parts: list[Any] = _image_parts(images)
     parts.append(_text_part(_PROMPT.format(n=len(images))))
 
@@ -154,18 +164,20 @@ def _call_gemini(images: list[tuple[bytes, str]]) -> dict[str, Any] | None:
         parts,
         thinking_level="LOW",
         label=f"all-docs ({len(images)} img)",
+        deadline=deadline,
     )
     if parsed is None:
         return {"eslatma": "OCR ishlamadi — javob yo'q. Qayta urinib ko'ring."}
 
-    if len(images) >= 5:
+    if len(images) >= 5 and time.monotonic() < deadline - 8:
         tex_parts = _image_parts(images[3:5])
         tex_parts.append(_text_part(_TEX_PROMPT))
         tex = _request_json(
             client,
             tex_parts,
-            thinking_level="MEDIUM",
+            thinking_level="LOW" if _on_vercel() else "MEDIUM",
             label="texpasport",
+            deadline=deadline,
         )
         if tex:
             _merge_tech_fields(parsed, tex)
@@ -175,8 +187,16 @@ def _call_gemini(images: list[tuple[bytes, str]]) -> dict[str, Any] | None:
 
 def _genai_client():
     from google import genai
+    from google.genai import types
 
-    return genai.Client(api_key=settings.gemini_api_key)
+    timeout_ms = 20_000 if _on_vercel() else 60_000
+    try:
+        return genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options=types.HttpOptions(timeout=timeout_ms),
+        )
+    except TypeError:
+        return genai.Client(api_key=settings.gemini_api_key)
 
 
 def _image_parts(images: list[tuple[bytes, str]]) -> list[Any]:
@@ -197,6 +217,7 @@ def _request_json(
     *,
     thinking_level: str,
     label: str,
+    deadline: float | None = None,
 ) -> dict[str, Any] | None:
     from google.genai import types
     from google.genai.errors import APIError
@@ -205,9 +226,13 @@ def _request_json(
         thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
         response_mime_type="application/json",
     )
+    attempts = 2 if _on_vercel() else 4
     last_error: str | None = None
     for model_name in _models_to_try():
-        for attempt in range(4):
+        for attempt in range(attempts):
+            if deadline is not None and time.monotonic() >= deadline:
+                log.warning("gemini %s stopped: time budget", label)
+                return None
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -222,8 +247,12 @@ def _request_json(
                 break
             except APIError as exc:
                 last_error = f"{model_name}: {getattr(exc, 'message', exc)!s}"[:200]
-                if _is_retryable(exc) and attempt < 3:
-                    time.sleep(3 * (attempt + 1))
+                if _is_retryable(exc) and attempt < attempts - 1:
+                    delay = 1 if _on_vercel() else 3 * (attempt + 1)
+                    if deadline is not None:
+                        delay = min(delay, max(0.0, deadline - time.monotonic() - 1))
+                    if delay > 0:
+                        time.sleep(delay)
                     continue
                 log.warning("gemini %s failed: %s", label, last_error)
                 break
