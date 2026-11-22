@@ -37,6 +37,25 @@ BTN_BACK = "⬅️ Orqaga"
 MENU_BUTTONS = {BTN_APPLY, BTN_BRAND, BTN_CONTACT, BTN_OFFICE}
 
 
+def contact_footer() -> str:
+    lines: list[str] = []
+    if settings.support_phone:
+        lines.append(f"📞 {escape(settings.support_phone)}")
+    if settings.operator_username:
+        username = settings.operator_username.lstrip("@")
+        lines.append(
+            f'✈️ Telegram: <a href="https://t.me/{escape(username)}">@{escape(username)}</a>'
+        )
+    if not lines:
+        return ""
+    return "\n\nSavol bo'lsa:\n" + "\n".join(lines)
+
+
+def with_contacts(text: str) -> str:
+    footer = contact_footer()
+    return f"{text}{footer}" if footer else text
+
+
 def welcome() -> str:
     return (
         f"<b>{escape(settings.park_name)}</b>\n"
@@ -212,6 +231,7 @@ def office_text(city: str) -> str:
         f"Manzil — {escape(settings.office_address)}\n\n"
         f"Mo'ljal: {escape(settings.office_landmark)}\n\n"
         "👇 Manzilni ko'rish uchun «Xaritada ochish» tugmasini bosing."
+        f"{contact_footer()}"
     )
 
 

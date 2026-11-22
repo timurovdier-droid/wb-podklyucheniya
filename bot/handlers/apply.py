@@ -27,6 +27,7 @@ from bot.texts import (
     plate_again,
     sending,
     send_failed,
+    with_contacts,
 )
 
 router = Router()
@@ -37,14 +38,15 @@ _albums: dict[str, dict] = {}
 async def _ask_step(message: Message, step: int) -> None:
     filename, prompt = PHOTO_STEPS[step]
     sample = example_path(filename)
+    caption = with_contacts(prompt)
     if sample:
-        await message.answer_photo(FSInputFile(sample), caption=prompt, reply_markup=back_keyboard())
+        await message.answer_photo(FSInputFile(sample), caption=caption, reply_markup=back_keyboard())
     else:
-        await message.answer(prompt, reply_markup=back_keyboard())
+        await message.answer(caption, reply_markup=back_keyboard())
 
 
 async def _ask_cars(message: Message) -> None:
-    await message.answer(CAR_PROMPT, reply_markup=back_keyboard())
+    await message.answer(with_contacts(CAR_PROMPT), reply_markup=back_keyboard())
     media: list[InputMediaPhoto] = []
     for index, (filename, caption) in enumerate(CAR_EXAMPLES):
         sample = example_path(filename)
@@ -52,7 +54,7 @@ async def _ask_cars(message: Message) -> None:
             media.append(
                 InputMediaPhoto(
                     media=FSInputFile(sample),
-                    caption=caption if index == 0 else None,
+                    caption=with_contacts(caption) if index == 0 else None,
                 )
             )
     if media:
@@ -60,7 +62,7 @@ async def _ask_cars(message: Message) -> None:
         return
     legacy = example_path("car.jpg")
     if legacy:
-        await message.answer_photo(FSInputFile(legacy), caption="Namuna")
+        await message.answer_photo(FSInputFile(legacy), caption=with_contacts("Namuna"))
 
 
 async def _finish_cars(message: Message, state: FSMContext, file_ids: list[str]) -> None:
