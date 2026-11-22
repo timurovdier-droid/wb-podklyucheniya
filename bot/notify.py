@@ -106,11 +106,20 @@ async def complete_tayyor(bot: Bot, message, app: dict | None) -> tuple[bool, st
             except Exception:
                 text = message.text or message.caption or ""
                 await bot.send_message(work, f"✅ Tayyor · {code}\n\n{text}"[:4096])
-        except Exception:
+        except Exception as exc:
             log.exception("tayyor copy to work chat failed for %s", code)
+            detail = str(exc)
+            if "kicked" in detail.lower():
+                return (
+                    False,
+                    "⚠️ Bot ish guruhidan chiqarilgan.\n"
+                    "Iltimos, @gtataxi_bot ni ish guruhiga qayta qo'shing "
+                    "va yozish huquqini bering, keyin Tayyor ni qayta bosing.",
+                )
             return (
                 False,
-                f"⚠️ Ish guruhiga yuborilmadi. Bot guruhda va yozishi mumkin (WORK_CHAT_ID={work}).",
+                "⚠️ Ish guruhiga yuborilmadi. "
+                "Botni ish guruhiga qo'shing va yozish huquqini bering.",
             )
 
     for mid in sorted(set(album_ids + [card_id])):
