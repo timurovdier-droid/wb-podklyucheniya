@@ -347,6 +347,8 @@ def admin_card_ulanish(app: dict) -> str:
         f"<b>{escape(settings.park_name)} · HAYDOVCHI ARIZASI</b>",
         f"Ariza: <code>{escape(app['code'])}</code> · {escape(app.get('city') or '')}",
         f"Arizachi: {username}",
+        f'Haydovchi: <a href="tg://user?id={app["user_id"]}">profil</a>',
+        f"Telegram ID: <code>{app['user_id']}</code>",
     ]
     if app.get("status") == "contacted":
         lines.append("🟡 <b>Jarayonda</b> — boshqa operator bog'lanmoqda")

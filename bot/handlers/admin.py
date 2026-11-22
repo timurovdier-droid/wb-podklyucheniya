@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery
 from bot import cache, db, notify, sheets
 from bot.config import settings
 from bot.keyboards import menu_keyboard, status_keyboard
-from bot.message_utils import application_code_from_message
+from bot.message_utils import application_code_from_message, user_id_from_message
 from bot.texts import admin_card, incomplete_docs_notice, status_notice
 
 log = logging.getLogger(__name__)
@@ -68,29 +68,31 @@ async def set_status(callback: CallbackQuery) -> None:
                 return
 
         if target_status == "connected":
+            driver_id = (
+                (current or {}).get("user_id")
+                or user_id_from_message(callback.message)
+            )
+            code = (current or {}).get("code") or application_code_from_message(callback.message) or ""
+            kind = (current or {}).get("kind") or "ulanish"
+            if driver_id:
+                try:
+                    await callback.bot.send_message(
+                        driver_id,
+                        status_notice(kind, target_status, code),
+                    )
+                except Exception:
+                    log.exception("failed to notify driver %s", driver_id)
+                    await _reply(callback, "⚠️ Haydovchiga xabar yuborilmadi (u botni bloklagan bo'lishi mumkin).")
+            else:
+                await _reply(callback, "⚠️ Haydovchi ID topilmadi — bildirishnoma yuborilmadi.")
+
             ok, result_text = await notify.complete_tayyor(callback.bot, callback.message, current)
-            if not ok:
-                await _reply(callback, result_text)
-                return
             updated = await db.set_status(app_id, target_status)
             if updated is None and current:
                 updated = {**current, "status": target_status}
                 cache.remember(updated)
             elif updated is None:
                 updated = current
-            driver_id = (updated or {}).get("user_id") or (current or {}).get("user_id")
-            if driver_id:
-                try:
-                    await callback.bot.send_message(
-                        driver_id,
-                        status_notice(
-                            (updated or current or {}).get("kind") or "ulanish",
-                            target_status,
-                            (updated or current or {}).get("code") or "",
-                        ),
-                    )
-                except Exception:
-                    log.exception("failed to notify driver %s", driver_id)
             if updated:
                 await sheets.update_status(updated["kind"], updated["code"], target_status)
             await _reply(callback, result_text)
