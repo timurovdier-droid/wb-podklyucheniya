@@ -14,7 +14,6 @@ from aiogram.types import Update
 from bot import db
 from bot.config import settings
 from bot.factory import create_dispatcher
-from bot.telegram_ack import ack_callback_query
 
 log = logging.getLogger("bot.webhook")
 
@@ -33,12 +32,12 @@ async def _runtime_bundle() -> dict[str, Any]:
 
 async def process_webhook(body: bytes) -> None:
     if not settings.bot_token:
-        raise RuntimeError("BOT_TOKEN is empty")
-    raw = json.loads(body.decode("utf-8"))
-    callback = raw.get("callback_query") or {}
-    query_id = callback.get("id")
-    if query_id:
-        await ack_callback_query(str(query_id))
-    bundle = await _runtime_bundle()
-    update = Update.model_validate(raw)
-    await bundle["dispatcher"].feed_update(bundle["bot"], update)
+        log.error("BOT_TOKEN is empty on the server")
+        return
+    try:
+        raw = json.loads(body.decode("utf-8"))
+        bundle = await _runtime_bundle()
+        update = Update.model_validate(raw)
+        await bundle["dispatcher"].feed_update(bundle["bot"], update)
+    except Exception:
+        log.exception("webhook processing failed")

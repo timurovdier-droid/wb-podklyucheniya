@@ -24,10 +24,13 @@ def _sheet_id(raw: str) -> str:
 
 
 def _chat_id(raw: str) -> int:
-    raw = raw.strip()
+    raw = (raw or "").strip()
     if not raw:
         return 0
-    return int(raw)
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
 
 
 def _first_text(*names: str, default: str = "") -> str:

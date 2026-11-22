@@ -20,8 +20,16 @@ async def _reply(callback: CallbackQuery, text: str) -> None:
         await callback.message.reply(text)
 
 
+async def _ack(callback: CallbackQuery, text: str = "") -> None:
+    try:
+        await callback.answer(text)
+    except Exception:
+        log.debug("callback answer skipped", exc_info=True)
+
+
 @router.callback_query(F.data.startswith("st:"))
 async def set_status(callback: CallbackQuery) -> None:
+    await _ack(callback)
     try:
         if not callback.message:
             return
