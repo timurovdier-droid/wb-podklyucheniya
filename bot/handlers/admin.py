@@ -78,14 +78,19 @@ async def set_status(callback: CallbackQuery) -> None:
                 cache.remember(updated)
             elif updated is None:
                 updated = current
-            if updated and updated.get("user_id"):
+            driver_id = (updated or {}).get("user_id") or (current or {}).get("user_id")
+            if driver_id:
                 try:
                     await callback.bot.send_message(
-                        updated["user_id"],
-                        status_notice(updated["kind"], target_status, updated.get("code") or ""),
+                        driver_id,
+                        status_notice(
+                            (updated or current or {}).get("kind") or "ulanish",
+                            target_status,
+                            (updated or current or {}).get("code") or "",
+                        ),
                     )
                 except Exception:
-                    log.exception("failed to notify driver %s", updated.get("user_id"))
+                    log.exception("failed to notify driver %s", driver_id)
             if updated:
                 await sheets.update_status(updated["kind"], updated["code"], target_status)
             await _reply(callback, result_text)

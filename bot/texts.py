@@ -291,19 +291,26 @@ def status_notice(kind: str, status: str, code: str) -> str:
     titles = {
         ("ulanish", "contacted"): "Operatorimiz siz bilan bog'lanadi.",
         ("ulanish", "connected"): (
-            "✅ <b>Arizangiz ishga olindi!</b>\n\n"
-            "Operatorlar arizangizni qabul qilishdi. "
-            "Tez orada ulanish bo'yicha siz bilan bog'lanishadi."
+            "✅ <b>Arizangiz ishlovga olindi</b>\n\n"
+            "Operatorlar arizangizni qabul qilishdi va ishga olishdi. "
+            "Hozir arizangiz ko'rib chiqilmoqda. Tez orada siz bilan bog'lanishadi."
         ),
         ("ulanish", "rejected"): "Arizangiz ko'rib chiqildi. Afsuski, arizangiz tasdiqlanmadi.",
         ("brend", "contacted"): "Operatorimiz brend arizangiz bo'yicha siz bilan bog'lanadi.",
-        ("brend", "connected"): "Brend arizangiz tasdiqlandi.",
+        ("brend", "connected"): (
+            "✅ <b>Arizangiz ishlovga olindi</b>\n\n"
+            "Brend arizangiz qabul qilindi va ishga olindi. "
+            "Tez orada operatorlar siz bilan bog'lanishadi."
+        ),
     }
     body = titles.get((kind, status), "Ariza holati yangilandi.")
     extra = ""
     if status == "rejected" and phone:
         extra = f"\n\nSavollar bo'lsa, {escape(phone)} raqamiga murojaat qiling."
-    return f"Ariza <code>{escape(code)}</code>\n\n{body}{extra}"
+    text = f"Ariza <code>{escape(code)}</code>\n\n{body}{extra}"
+    if status == "connected":
+        return with_contacts(text)
+    return text
 
 
 STATUS_LABELS = {
