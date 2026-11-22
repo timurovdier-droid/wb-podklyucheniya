@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -17,27 +16,27 @@ from bot.factory import create_dispatcher
 
 log = logging.getLogger("bot.webhook")
 
-_runtime: dict[str, Any] | None = None
+_dispatcher = None
 
 
-async def _runtime_bundle() -> dict[str, Any]:
-    global _runtime
-    if _runtime is None:
-        await db.init()
-        bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-        dispatcher = create_dispatcher()
-        _runtime = {"bot": bot, "dispatcher": dispatcher}
-    return _runtime
+def _get_dispatcher():
+    global _dispatcher
+    if _dispatcher is None:
+        _dispatcher = create_dispatcher()
+    return _dispatcher
 
 
 async def process_webhook(body: bytes) -> None:
     if not settings.bot_token:
         log.error("BOT_TOKEN is empty on the server")
         return
+    bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
+        await db.init()
         raw = json.loads(body.decode("utf-8"))
-        bundle = await _runtime_bundle()
         update = Update.model_validate(raw)
-        await bundle["dispatcher"].feed_update(bundle["bot"], update)
+        await _get_dispatcher().feed_update(bot, update)
     except Exception:
         log.exception("webhook processing failed")
+    finally:
+        await bot.session.close()
