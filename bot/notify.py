@@ -56,8 +56,8 @@ async def _enrich_ocr(bot: Bot, app: dict) -> dict:
 
 async def forward_to_work(bot: Bot, app: dict) -> bool:
     if not settings.work_chat_id:
-        log.warning("WORK_CHAT_ID is empty, skip forward for %s", app.get("code"))
-        return False
+        log.info("WORK_CHAT_ID not set, skip forward for %s", app.get("code"))
+        return True
     try:
         if app.get("kind") == "ulanish":
             photos = list(app.get("photos") or [])

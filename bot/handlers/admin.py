@@ -39,7 +39,9 @@ async def set_status(callback: CallbackQuery) -> None:
         forwarded = await notify.forward_to_work(callback.bot, current)
         if not forwarded:
             await callback.answer(
-                f"Ariza ish guruhiga yuborilmadi. Botni {settings.work_chat_id} guruhiga qo'shing.",
+                "Ariza ish guruhiga yuborilmadi. "
+                f"Botni ish guruhiga qo'shing (WORK_CHAT_ID={settings.work_chat_id}) "
+                "va unga yozish huquqini bering.",
                 show_alert=True,
             )
             return
