@@ -4,7 +4,7 @@ from aiogram.types import Message, ReplyKeyboardRemove
 
 from bot import db
 from bot.brand_rules import brand_block_reason, is_full_name, is_phone, is_plate, normalize_plate, parse_year
-from bot.keyboards import continue_keyboard, menu_keyboard
+from bot.keyboards import back_keyboard, continue_keyboard, menu_keyboard
 from bot.notify import deliver
 from bot.states import Flow
 from bot.texts import (
@@ -34,7 +34,7 @@ router = Router()
 async def brand_continue(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.set_state(Flow.brand_name)
-    await message.answer(brand_ask_name(data.get("city") or ""), reply_markup=ReplyKeyboardRemove())
+    await message.answer(brand_ask_name(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_rules)
@@ -50,7 +50,7 @@ async def brand_name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(full_name=message.text.strip())
     await state.set_state(Flow.brand_phone)
-    await message.answer(brand_ask_phone(data.get("city") or ""))
+    await message.answer(brand_ask_phone(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_phone, F.text)
@@ -61,7 +61,7 @@ async def brand_phone(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(phone=message.text.strip())
     await state.set_state(Flow.brand_model)
-    await message.answer(brand_ask_model(data.get("city") or ""))
+    await message.answer(brand_ask_model(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_phone, F.contact)
@@ -73,7 +73,7 @@ async def brand_phone_contact(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(phone=phone)
     await state.set_state(Flow.brand_model)
-    await message.answer(brand_ask_model(data.get("city") or ""))
+    await message.answer(brand_ask_model(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_model, F.text)
@@ -85,7 +85,7 @@ async def brand_model(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(car_model=model)
     await state.set_state(Flow.brand_year)
-    await message.answer(brand_ask_year(data.get("city") or ""))
+    await message.answer(brand_ask_year(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_year, F.text)
@@ -100,15 +100,15 @@ async def brand_year(message: Message, state: FSMContext) -> None:
     if reason == "model":
         await message.answer(brand_rejected_rules())
         await state.set_state(Flow.brand_model)
-        await message.answer(brand_ask_model(city))
+        await message.answer(brand_ask_model(city), reply_markup=back_keyboard())
         return
     if reason == "year":
         await message.answer(brand_rejected_rules())
-        await message.answer(brand_ask_year(city))
+        await message.answer(brand_ask_year(city), reply_markup=back_keyboard())
         return
     await state.update_data(car_year=str(year))
     await state.set_state(Flow.brand_color)
-    await message.answer(brand_ask_color(city))
+    await message.answer(brand_ask_color(city), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_color, F.text)
@@ -120,13 +120,13 @@ async def brand_color(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(car_color=color)
     await state.set_state(Flow.brand_plate)
-    await message.answer(brand_ask_plate(data.get("city") or ""))
+    await message.answer(brand_ask_plate(data.get("city") or ""), reply_markup=back_keyboard())
 
 
 @router.message(Flow.brand_plate, F.text)
 async def brand_plate(message: Message, state: FSMContext) -> None:
     if not is_plate(message.text or ""):
-        await message.answer(plate_again())
+        await message.answer(plate_again(), reply_markup=back_keyboard())
         return
     data = await state.get_data()
     user = message.from_user
@@ -161,4 +161,4 @@ async def brand_plate(message: Message, state: FSMContext) -> None:
 @router.message(Flow.brand_color)
 @router.message(Flow.brand_plate)
 async def brand_need_text(message: Message) -> None:
-    await message.answer("Iltimos, javobni matn ko'rinishida yozing.")
+    await message.answer("Iltimos, javobni matn ko'rinishida yozing.", reply_markup=back_keyboard())

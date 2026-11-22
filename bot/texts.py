@@ -32,6 +32,7 @@ BTN_CONTACT = "Bog'lanish uchun"
 BTN_OFFICE = "Ofis manzili"
 BTN_PHONE = "Raqamni jo'natish"
 BTN_CONTINUE = "Davom etish"
+BTN_BACK = "⬅️ Orqaga"
 
 MENU_BUTTONS = {BTN_APPLY, BTN_BRAND, BTN_CONTACT, BTN_OFFICE}
 

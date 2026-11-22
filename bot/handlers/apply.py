@@ -8,7 +8,7 @@ from bot import db
 from bot.brand_rules import is_phone, is_plate, normalize_phone, normalize_plate
 from bot.config import settings
 from bot.handlers.menu import example_path
-from bot.keyboards import continue_keyboard, menu_keyboard
+from bot.keyboards import back_keyboard, continue_keyboard, menu_keyboard, phone_keyboard
 from bot.notify import deliver
 from bot.states import Flow
 from bot.texts import (
@@ -38,13 +38,13 @@ async def _ask_step(message: Message, step: int) -> None:
     filename, prompt = PHOTO_STEPS[step]
     sample = example_path(filename)
     if sample:
-        await message.answer_photo(FSInputFile(sample), caption=prompt)
+        await message.answer_photo(FSInputFile(sample), caption=prompt, reply_markup=back_keyboard())
     else:
-        await message.answer(prompt)
+        await message.answer(prompt, reply_markup=back_keyboard())
 
 
 async def _ask_cars(message: Message) -> None:
-    await message.answer(CAR_PROMPT)
+    await message.answer(CAR_PROMPT, reply_markup=back_keyboard())
     media: list[InputMediaPhoto] = []
     for index, (filename, caption) in enumerate(CAR_EXAMPLES):
         sample = example_path(filename)
@@ -67,7 +67,7 @@ async def _finish_cars(message: Message, state: FSMContext, file_ids: list[str])
     await state.update_data(car_photos=file_ids)
     await state.set_state(Flow.apply_plate)
     await message.answer(cars_ok())
-    await message.answer(ask_plate())
+    await message.answer(ask_plate(), reply_markup=back_keyboard())
 
 
 async def _after_phone(message: Message, state: FSMContext, phone: str, full_name: str) -> None:
@@ -84,10 +84,10 @@ async def _after_phone(message: Message, state: FSMContext, phone: str, full_nam
 async def take_phone(message: Message, state: FSMContext) -> None:
     contact = message.contact
     if contact is None or not contact.phone_number:
-        await message.answer(apply_phone_again())
+        await message.answer(apply_phone_again(), reply_markup=phone_keyboard())
         return
     if contact.user_id and message.from_user and contact.user_id != message.from_user.id:
-        await message.answer(apply_phone_again())
+        await message.answer(apply_phone_again(), reply_markup=phone_keyboard())
         return
     name = " ".join(part for part in [contact.first_name, contact.last_name] if part).strip()
     if not name and message.from_user:
@@ -100,7 +100,7 @@ async def take_phone(message: Message, state: FSMContext) -> None:
 async def take_phone_text(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     if not is_phone(text):
-        await message.answer(apply_phone_again())
+        await message.answer(apply_phone_again(), reply_markup=phone_keyboard())
         return
     name = message.from_user.full_name if message.from_user else ""
     await _after_phone(message, state, normalize_phone(text), name)
@@ -115,20 +115,20 @@ def _voice():
 
 @router.message(Flow.apply_phone)
 async def take_phone_invalid(message: Message) -> None:
-    await message.answer(apply_phone_again())
+    await message.answer(apply_phone_again(), reply_markup=phone_keyboard())
 
 
 @router.message(Flow.apply_warn, F.text == BTN_CONTINUE)
 async def continue_docs(message: Message, state: FSMContext) -> None:
     await state.set_state(Flow.apply_photo)
     await state.update_data(step=0, photos=[])
-    await message.answer("Hujjat rasmlarini yuboring.", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Hujjat rasmlarini yuboring.", reply_markup=back_keyboard())
     await _ask_step(message, 0)
 
 
 @router.message(Flow.apply_warn)
 async def warn_invalid(message: Message) -> None:
-    await message.answer("Davom etish tugmasini bosing.")
+    await message.answer("Davom etish tugmasini bosing.", reply_markup=continue_keyboard())
 
 
 @router.message(Flow.apply_photo, F.photo)
@@ -149,7 +149,7 @@ async def take_document(message: Message, state: FSMContext) -> None:
 
 @router.message(Flow.apply_photo)
 async def document_invalid(message: Message) -> None:
-    await message.answer(need_photo())
+    await message.answer(need_photo(), reply_markup=back_keyboard())
 
 
 @router.message(Flow.apply_cars, F.photo)
@@ -162,7 +162,7 @@ async def take_car(message: Message, state: FSMContext) -> None:
     cars.append(message.photo[-1].file_id)
     if len(cars) < 4:
         await state.update_data(car_photos=cars)
-        await message.answer(cars_progress(len(cars)))
+        await message.answer(cars_progress(len(cars)), reply_markup=back_keyboard())
         return
     await _finish_cars(message, state, cars[:4])
 
@@ -190,20 +190,20 @@ async def _flush_album(key: str) -> None:
     ids = item["ids"]
     if len(ids) != 4:
         await state.update_data(car_photos=[])
-        await message.answer(cars_need_four())
+        await message.answer(cars_need_four(), reply_markup=back_keyboard())
         return
     await _finish_cars(message, state, ids)
 
 
 @router.message(Flow.apply_cars)
 async def cars_invalid(message: Message) -> None:
-    await message.answer(cars_need_four())
+    await message.answer(cars_need_four(), reply_markup=back_keyboard())
 
 
 @router.message(Flow.apply_plate, F.text)
 async def take_plate(message: Message, state: FSMContext) -> None:
     if not is_plate(message.text or ""):
-        await message.answer(plate_again())
+        await message.answer(plate_again(), reply_markup=back_keyboard())
         return
     data = await state.get_data()
     photos = list(data.get("photos") or [])
@@ -239,4 +239,4 @@ async def take_plate(message: Message, state: FSMContext) -> None:
 
 @router.message(Flow.apply_plate)
 async def plate_invalid(message: Message) -> None:
-    await message.answer(plate_again())
+    await message.answer(plate_again(), reply_markup=back_keyboard())

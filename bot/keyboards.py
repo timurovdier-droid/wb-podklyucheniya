@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 from bot.config import settings
 from bot.texts import (
     BTN_APPLY,
+    BTN_BACK,
     BTN_BRAND,
     BTN_CONTACT,
     BTN_CONTINUE,
@@ -11,11 +12,14 @@ from bot.texts import (
 )
 
 
+def _back_row() -> list[KeyboardButton]:
+    return [KeyboardButton(text=BTN_BACK)]
+
+
 def city_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=city)] for city in settings.cities],
-        resize_keyboard=True,
-    )
+    rows = [[KeyboardButton(text=city)] for city in settings.cities]
+    rows.append(_back_row())
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def menu_keyboard() -> ReplyKeyboardMarkup:
@@ -24,6 +28,7 @@ def menu_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_APPLY)],
             [KeyboardButton(text=BTN_BRAND)],
             [KeyboardButton(text=BTN_CONTACT), KeyboardButton(text=BTN_OFFICE)],
+            _back_row(),
         ],
         resize_keyboard=True,
     )
@@ -31,16 +36,26 @@ def menu_keyboard() -> ReplyKeyboardMarkup:
 
 def phone_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=BTN_PHONE, request_contact=True)]],
+        keyboard=[
+            [KeyboardButton(text=BTN_PHONE, request_contact=True)],
+            _back_row(),
+        ],
         resize_keyboard=True,
     )
 
 
 def continue_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=BTN_CONTINUE)]],
+        keyboard=[
+            [KeyboardButton(text=BTN_CONTINUE)],
+            _back_row(),
+        ],
         resize_keyboard=True,
     )
+
+
+def back_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[_back_row()], resize_keyboard=True)
 
 
 def office_keyboard() -> InlineKeyboardMarkup:
