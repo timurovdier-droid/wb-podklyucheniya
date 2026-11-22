@@ -69,20 +69,38 @@ def _album_message_ids(card_message_id: int, album_ids: list[int] | None) -> lis
     return list(range(max(1, card_message_id - 14), card_message_id))
 
 
+async def _copy_albums(bot: Bot, work: int, admin_chat: int, album_ids: list[int]) -> None:
+    chunks: list[list[int]] = []
+    if len(album_ids) > 7:
+        chunks.append(album_ids[:7])
+        rest = album_ids[7:]
+        if rest:
+            chunks.append(rest)
+    elif album_ids:
+        chunks.append(album_ids)
+    for group in chunks:
+        ids = sorted(set(group))
+        if len(ids) == 1:
+            await bot.copy_message(work, admin_chat, ids[0])
+            continue
+        await bot.forward_messages(chat_id=work, from_chat_id=admin_chat, message_ids=ids)
+
+
 async def complete_tayyor(bot: Bot, message, app: dict | None) -> tuple[bool, str]:
     admin_chat = message.chat.id
     card_id = message.message_id
     code = (app or {}).get("code") or application_code_from_message(message) or "ariza"
     album_ids = _album_message_ids(card_id, (app or {}).get("admin_album_message_ids"))
+    photos = list((app or {}).get("photos") or [])
     work = settings.work_chat_id
 
     if work:
         try:
-            for mid in album_ids:
-                try:
-                    await bot.copy_message(work, admin_chat, mid)
-                except Exception:
-                    log.debug("copy admin photo %s skipped", mid, exc_info=True)
+            if photos:
+                await _album(bot, work, photos[:7], f"✅ Tayyor · {code} — hujjatlar")
+                await _album(bot, work, photos[7:], f"✅ Tayyor · {code} — mashina")
+            elif album_ids:
+                await _copy_albums(bot, work, admin_chat, album_ids)
             try:
                 await bot.copy_message(work, admin_chat, card_id)
             except Exception:
