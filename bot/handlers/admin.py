@@ -3,10 +3,11 @@ import logging
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
-from bot import db, notify, sheets
+from bot import cache, db, notify, sheets
 from bot.config import settings
 from bot.keyboards import menu_keyboard, status_keyboard
-from bot.texts import STATUS_LABELS, admin_card, incomplete_docs_notice, status_notice
+from bot.message_utils import application_code_from_message
+from bot.texts import admin_card, incomplete_docs_notice, status_notice
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -14,68 +15,68 @@ router = Router()
 _ALLOWED = {"contacted", "connected", "incomplete", "rejected"}
 
 
+async def _reply(callback: CallbackQuery, text: str) -> None:
+    if callback.message:
+        await callback.message.reply(text)
+
+
 @router.callback_query(F.data.startswith("st:"))
 async def set_status(callback: CallbackQuery) -> None:
-    answered = False
-
-    async def answer_once(text: str = "", *, show_alert: bool = False) -> None:
-        nonlocal answered
-        if answered:
-            return
-        await callback.answer(text, show_alert=show_alert)
-        answered = True
-
     try:
-        if not callback.message or callback.message.chat.id != settings.admin_chat_id:
-            await answer_once("Bu tugma faqat operatorlar guruhida ishlaydi.", show_alert=True)
+        if not callback.message:
+            return
+        admin_chat = settings.admin_chat_id
+        if admin_chat and callback.message.chat.id != admin_chat:
+            await _reply(callback, "Bu tugma faqat operatorlar guruhida ishlaydi.")
             return
         parts = (callback.data or "").split(":")
         if len(parts) != 3 or parts[2] not in _ALLOWED:
-            await answer_once()
             return
         app_id = int(parts[1])
         status = parts[2]
         current = await db.get_application(app_id)
         if current is None:
-            await answer_once("Ariza topilmadi.", show_alert=True)
+            code = application_code_from_message(callback.message)
+            if code:
+                current = cache.recall_by_code(code)
+        if current is None:
+            await _reply(
+                callback,
+                "Ariza serverda topilmadi (qayta yuklash). "
+                "Yangi ariza yuboring yoki botni kompyuterdan ishga tushiring.",
+            )
             return
+        if not current.get("photos"):
+            cached = cache.recall(app_id) or cache.recall_by_code(str(current.get("code") or ""))
+            if cached and cached.get("photos"):
+                current = cached
+
         target_status = status
         if status == "contacted" and current["status"] == "contacted":
             target_status = "new"
         elif current["status"] == status:
-            await answer_once("Bu holat allaqachon qo'yilgan.")
+            await _reply(callback, "Bu holat allaqachon qo'yilgan.")
             return
-
-        if target_status == "contacted":
-            await answer_once("🟡 Jarayonda")
-        elif target_status == "new" and status == "contacted":
-            await answer_once("🟢 Jarayonda bekor qilindi")
-        elif target_status == "incomplete":
-            await answer_once("Xabar yuborilmoqda…")
-        elif target_status == "connected":
-            await answer_once("✅ Tayyor")
-        else:
-            await answer_once(STATUS_LABELS.get(target_status, target_status))
 
         if target_status == "connected":
             forwarded = await notify.forward_to_work(callback.bot, current)
             if not forwarded:
-                if callback.message:
-                    await callback.message.reply(
-                        "⚠️ Ariza ish guruhiga yuborilmadi. "
-                        f"Botni ish guruhiga qo'shing (WORK_CHAT_ID={settings.work_chat_id})."
-                    )
+                await _reply(
+                    callback,
+                    "⚠️ Ish guruhiga yuborilmadi. "
+                    f"Botni guruhga qo'shing (WORK_CHAT_ID={settings.work_chat_id}).",
+                )
                 return
 
         updated = await db.set_status(app_id, target_status)
         if updated is None:
-            if not answered:
-                await answer_once()
+            await _reply(callback, "Holat saqlanmadi.")
             return
 
         if target_status == "connected":
-            card_id = callback.message.message_id if callback.message else None
+            card_id = callback.message.message_id
             await notify.remove_from_admin(callback.bot, updated, card_id)
+            await _reply(callback, "✅ Tayyor — ish guruhiga yuborildi.")
         else:
             try:
                 await callback.message.edit_text(
@@ -106,5 +107,4 @@ async def set_status(callback: CallbackQuery) -> None:
         await sheets.update_status(updated["kind"], updated["code"], target_status)
     except Exception:
         log.exception("admin set_status failed")
-        if not answered:
-            await answer_once("Vaqtinchalik xatolik. Qayta urinib ko'ring.", show_alert=True)
+        await _reply(callback, "Vaqtinchalik xatolik. Qayta urinib ko'ring.")

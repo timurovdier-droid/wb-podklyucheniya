@@ -4,7 +4,7 @@ import os
 from aiogram import Bot
 from aiogram.types import InputMediaPhoto
 
-from bot import db, gemini_docs, sheets
+from bot import cache, db, gemini_docs, sheets
 from bot.config import settings
 from bot.keyboards import status_keyboard
 from bot.texts import admin_card
@@ -38,6 +38,11 @@ async def deliver(bot: Bot, app: dict) -> bool:
         log.exception("failed to deliver application %s", app["code"])
         return False
     await db.set_admin_message(app["id"], message.chat.id, message.message_id, album_ids)
+    fresh = await db.get_application(app["id"])
+    if fresh:
+        cache.remember(fresh)
+    else:
+        cache.remember(app)
     await sheets.append_application(app)
     return True
 

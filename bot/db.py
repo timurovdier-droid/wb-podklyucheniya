@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
+from bot import cache
 from bot.config import settings
 
 TZ = timezone(timedelta(hours=5))
@@ -88,6 +89,7 @@ async def create_application(payload: dict) -> dict:
     app = await get_application(app_id)
     if app is None:
         raise RuntimeError("application was not saved")
+    cache.remember(app)
     return app
 
 
@@ -97,8 +99,10 @@ async def get_application(app_id: int) -> dict | None:
         cursor = await db.execute("SELECT * FROM applications WHERE id = ?", (app_id,))
         row = await cursor.fetchone()
     if row is None:
-        return None
-    return _row_to_dict(row)
+        return cache.recall(app_id)
+    app = _row_to_dict(row)
+    cache.remember(app)
+    return app
 
 
 async def save_extracted(app_id: int, extracted: dict) -> None:
@@ -146,7 +150,15 @@ async def set_status(app_id: int, status: str) -> dict | None:
     async with _connect() as db:
         await db.execute("UPDATE applications SET status = ? WHERE id = ?", (status, app_id))
         await db.commit()
-    return await get_application(app_id)
+    app = await get_application(app_id)
+    if app is not None:
+        return app
+    cached = cache.recall(app_id)
+    if cached is None:
+        return None
+    cached = {**cached, "status": status}
+    cache.remember(cached)
+    return cached
 
 
 def _row_to_dict(row: aiosqlite.Row) -> dict:
