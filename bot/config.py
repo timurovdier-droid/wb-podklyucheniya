@@ -38,6 +38,12 @@ def _first_text(*names: str, default: str = "") -> str:
     return default
 
 
+def _database_path() -> Path:
+    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV"):
+        return Path("/tmp") / "bot.sqlite"
+    return ROOT / "data" / "bot.sqlite"
+
+
 def _normalize_username(raw: str) -> str:
     value = raw.strip()
     if not value:
@@ -75,7 +81,7 @@ class Settings:
     google_credentials_file = _text("GOOGLE_CREDENTIALS_FILE", "credentials.json")
     gemini_api_key = _text("GEMINI_API_KEY")
     gemini_model = _text("GEMINI_MODEL", "gemini-3.8-flash") or "gemini-3.8-flash"
-    database_path = ROOT / "data" / "bot.sqlite"
+    database_path = _database_path()
     assets_dir = ROOT / "assets"
 
 

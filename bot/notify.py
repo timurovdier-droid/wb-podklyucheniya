@@ -1,4 +1,5 @@
 import logging
+import os
 
 from aiogram import Bot
 from aiogram.types import InputMediaPhoto
@@ -42,6 +43,8 @@ async def deliver(bot: Bot, app: dict) -> bool:
 
 
 async def _enrich_ocr(bot: Bot, app: dict) -> dict:
+    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV"):
+        return app
     if not gemini_docs.enabled():
         return app
     extracted = await gemini_docs.extract_from_application(bot, app) or {}
