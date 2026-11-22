@@ -39,52 +39,62 @@ async def set_status(callback: CallbackQuery) -> None:
             code = application_code_from_message(callback.message)
             if code:
                 current = cache.recall_by_code(code)
-        if current is None:
+        if current is None and status != "connected":
             await _reply(
                 callback,
                 "Ariza serverda topilmadi (qayta yuklash). "
                 "Yangi ariza yuboring yoki botni kompyuterdan ishga tushiring.",
             )
             return
-        if not current.get("photos"):
+        if current and not current.get("photos"):
             cached = cache.recall(app_id) or cache.recall_by_code(str(current.get("code") or ""))
             if cached and cached.get("photos"):
                 current = cached
 
         target_status = status
-        if status == "contacted" and current["status"] == "contacted":
-            target_status = "new"
-        elif current["status"] == status:
-            await _reply(callback, "Bu holat allaqachon qo'yilgan.")
-            return
+        if current:
+            if status == "contacted" and current["status"] == "contacted":
+                target_status = "new"
+            elif current["status"] == status:
+                await _reply(callback, "Bu holat allaqachon qo'yilgan.")
+                return
 
         if target_status == "connected":
-            forwarded = await notify.forward_to_work(callback.bot, current)
-            if not forwarded:
-                await _reply(
-                    callback,
-                    "⚠️ Ish guruhiga yuborilmadi. "
-                    f"Botni guruhga qo'shing (WORK_CHAT_ID={settings.work_chat_id}).",
-                )
+            ok, result_text = await notify.complete_tayyor(callback.bot, callback.message, current)
+            if not ok:
+                await _reply(callback, result_text)
                 return
+            updated = await db.set_status(app_id, target_status)
+            if updated is None and current:
+                updated = {**current, "status": target_status}
+                cache.remember(updated)
+            elif updated is None:
+                updated = current
+            if updated and updated.get("user_id"):
+                try:
+                    await callback.bot.send_message(
+                        updated["user_id"],
+                        status_notice(updated["kind"], target_status, updated.get("code") or ""),
+                    )
+                except Exception:
+                    log.exception("failed to notify driver %s", updated.get("user_id"))
+            if updated:
+                await sheets.update_status(updated["kind"], updated["code"], target_status)
+            await _reply(callback, result_text)
+            return
 
         updated = await db.set_status(app_id, target_status)
         if updated is None:
             await _reply(callback, "Holat saqlanmadi.")
             return
 
-        if target_status == "connected":
-            card_id = callback.message.message_id
-            await notify.remove_from_admin(callback.bot, updated, card_id)
-            await _reply(callback, "✅ Tayyor — ish guruhiga yuborildi.")
-        else:
-            try:
-                await callback.message.edit_text(
-                    admin_card(updated),
-                    reply_markup=status_keyboard(app_id, updated["status"]),
-                )
-            except Exception:
-                log.exception("failed to edit admin card %s", updated["code"])
+        try:
+            await callback.message.edit_text(
+                admin_card(updated),
+                reply_markup=status_keyboard(app_id, updated["status"]),
+            )
+        except Exception:
+            log.exception("failed to edit admin card %s", updated["code"])
 
         if target_status == "incomplete" and updated["kind"] == "ulanish":
             try:
