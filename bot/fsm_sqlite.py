@@ -31,9 +31,11 @@ class SqliteStorage(BaseStorage):
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or settings.database_path
 
-    async def _connect(self) -> aiosqlite.Connection:
+    def _connect(self) -> aiosqlite.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        db = await aiosqlite.connect(self.path)
+        return aiosqlite.connect(self.path)
+
+    async def _ready(self, db: aiosqlite.Connection) -> None:
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS fsm_state (
@@ -44,10 +46,10 @@ class SqliteStorage(BaseStorage):
             """
         )
         await db.commit()
-        return db
 
     async def set_state(self, key: StorageKey, state: str | State | None = None) -> None:
-        async with await self._connect() as db:
+        async with self._connect() as db:
+            await self._ready(db)
             await db.execute(
                 """
                 INSERT INTO fsm_state (k, state, data) VALUES (?, ?, '{}')
@@ -58,14 +60,16 @@ class SqliteStorage(BaseStorage):
             await db.commit()
 
     async def get_state(self, key: StorageKey) -> str | None:
-        async with await self._connect() as db:
+        async with self._connect() as db:
+            await self._ready(db)
             cursor = await db.execute("SELECT state FROM fsm_state WHERE k = ?", (_key(key),))
             row = await cursor.fetchone()
         return row[0] if row else None
 
     async def set_data(self, key: StorageKey, data: Mapping[str, Any]) -> None:
         payload = json.dumps(dict(data), ensure_ascii=False)
-        async with await self._connect() as db:
+        async with self._connect() as db:
+            await self._ready(db)
             await db.execute(
                 """
                 INSERT INTO fsm_state (k, state, data) VALUES (?, NULL, ?)
@@ -76,7 +80,8 @@ class SqliteStorage(BaseStorage):
             await db.commit()
 
     async def get_data(self, key: StorageKey) -> dict[str, Any]:
-        async with await self._connect() as db:
+        async with self._connect() as db:
+            await self._ready(db)
             cursor = await db.execute("SELECT data FROM fsm_state WHERE k = ?", (_key(key),))
             row = await cursor.fetchone()
         if not row or not row[0]:
