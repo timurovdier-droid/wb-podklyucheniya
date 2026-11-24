@@ -73,6 +73,7 @@ class DatabaseTest(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as folder:
             settings.database_path = Path(folder) / "bot.sqlite"
+            settings.turso_url = ""
             settings.code_prefix = "WB"
             await db.init()
             first = await db.create_application(

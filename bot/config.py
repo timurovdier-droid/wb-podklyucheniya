@@ -85,6 +85,8 @@ class Settings:
     gemini_api_key = _text("GEMINI_API_KEY")
     gemini_model = _text("GEMINI_MODEL", "gemini-3.8-flash") or "gemini-3.8-flash"
     database_path = _database_path()
+    turso_url = _text("TURSO_DATABASE_URL")
+    turso_token = _text("TURSO_AUTH_TOKEN")
     assets_dir = ROOT / "assets"
 
 

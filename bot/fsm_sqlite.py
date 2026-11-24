@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
-import aiosqlite
 from aiogram.fsm.state import State
 from aiogram.fsm.storage.base import BaseStorage, StorageKey
 
-from bot.config import settings
+from bot import db, sql
 
 
 def _key(key: StorageKey) -> str:
@@ -28,66 +26,41 @@ def _state_value(state: str | State | None) -> str | None:
 
 
 class SqliteStorage(BaseStorage):
-    def __init__(self, path: Path | None = None) -> None:
-        self.path = path or settings.database_path
-
-    def _connect(self) -> aiosqlite.Connection:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        return aiosqlite.connect(self.path)
-
-    async def _ready(self, db: aiosqlite.Connection) -> None:
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS fsm_state (
-                k TEXT PRIMARY KEY,
-                state TEXT,
-                data TEXT
-            )
-            """
-        )
-        await db.commit()
+    """FSM в таблице fsm_state (Turso или локальный SQLite — см. bot.sql)."""
 
     async def set_state(self, key: StorageKey, state: str | State | None = None) -> None:
-        async with self._connect() as db:
-            await self._ready(db)
-            await db.execute(
-                """
-                INSERT INTO fsm_state (k, state, data) VALUES (?, ?, '{}')
-                ON CONFLICT(k) DO UPDATE SET state = excluded.state
-                """,
-                (_key(key), _state_value(state)),
-            )
-            await db.commit()
+        await db.init()
+        await sql.execute(
+            """
+            INSERT INTO fsm_state (k, state, data) VALUES (?, ?, '{}')
+            ON CONFLICT(k) DO UPDATE SET state = excluded.state
+            """,
+            (_key(key), _state_value(state)),
+        )
 
     async def get_state(self, key: StorageKey) -> str | None:
-        async with self._connect() as db:
-            await self._ready(db)
-            cursor = await db.execute("SELECT state FROM fsm_state WHERE k = ?", (_key(key),))
-            row = await cursor.fetchone()
-        return row[0] if row else None
+        await db.init()
+        result = await sql.execute("SELECT state FROM fsm_state WHERE k = ?", (_key(key),))
+        return result.rows[0]["state"] if result.rows else None
 
     async def set_data(self, key: StorageKey, data: Mapping[str, Any]) -> None:
-        payload = json.dumps(dict(data), ensure_ascii=False)
-        async with self._connect() as db:
-            await self._ready(db)
-            await db.execute(
-                """
-                INSERT INTO fsm_state (k, state, data) VALUES (?, NULL, ?)
-                ON CONFLICT(k) DO UPDATE SET data = excluded.data
-                """,
-                (_key(key), payload),
-            )
-            await db.commit()
+        await db.init()
+        await sql.execute(
+            """
+            INSERT INTO fsm_state (k, state, data) VALUES (?, NULL, ?)
+            ON CONFLICT(k) DO UPDATE SET data = excluded.data
+            """,
+            (_key(key), json.dumps(dict(data), ensure_ascii=False)),
+        )
 
     async def get_data(self, key: StorageKey) -> dict[str, Any]:
-        async with self._connect() as db:
-            await self._ready(db)
-            cursor = await db.execute("SELECT data FROM fsm_state WHERE k = ?", (_key(key),))
-            row = await cursor.fetchone()
-        if not row or not row[0]:
+        await db.init()
+        result = await sql.execute("SELECT data FROM fsm_state WHERE k = ?", (_key(key),))
+        raw = result.rows[0]["data"] if result.rows else None
+        if not raw:
             return {}
         try:
-            parsed = json.loads(row[0])
+            parsed = json.loads(raw)
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}

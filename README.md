@@ -71,6 +71,6 @@ python -m bot.main
 
 5. Проверка: `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`
 
-**Важно:** на Vercel файловая SQLite в `data/` не сохраняется между вызовами. Для продакшена на Vercel нужна внешняя БД (позже) или запускайте бота локально/VPS через `python -m bot.main` (polling).
+**Важно:** на Vercel файловая SQLite не сохраняется между вызовами, поэтому задайте `TURSO_DATABASE_URL` и `TURSO_AUTH_TOKEN` — заявки и шаги анкеты будут храниться в [Turso](https://turso.tech). Без них бот использует локальный SQLite в `data/` (подходит для `python -m bot.main` на своём сервере). Регион функций в `vercel.json` (`hnd1`) выбран рядом с базой Turso.
 
 Локально по-прежнему: `python -m bot.main`.
