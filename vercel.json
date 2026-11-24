@@ -7,6 +7,10 @@
   "routes": [
     { "src": "/api/webhook", "dest": "/api/webhook.py" },
     { "src": "/api/health", "dest": "/api/health.py" },
+    { "src": "/api/keepalive", "dest": "/api/keepalive.py" },
     { "src": "/(.*)", "dest": "/public/$1" }
+  ],
+  "crons": [
+    { "path": "/api/keepalive", "schedule": "0 22 * * *" }
   ]
 }
