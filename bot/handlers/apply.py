@@ -1,10 +1,11 @@
 import asyncio
+from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile, InputMediaPhoto, Message, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove
 
-from bot import db
+from bot import db, media
 from bot.brand_rules import is_phone, is_plate, normalize_phone, normalize_plate
 from bot.config import settings
 from bot.handlers.menu import example_path
@@ -40,29 +41,24 @@ async def _ask_step(message: Message, step: int) -> None:
     sample = example_path(filename)
     caption = with_contacts(prompt)
     if sample:
-        await message.answer_photo(FSInputFile(sample), caption=caption, reply_markup=back_keyboard())
+        await media.answer_photo(message, sample, caption=caption, reply_markup=back_keyboard())
     else:
         await message.answer(caption, reply_markup=back_keyboard())
 
 
 async def _ask_cars(message: Message) -> None:
     await message.answer(with_contacts(CAR_PROMPT), reply_markup=back_keyboard())
-    media: list[InputMediaPhoto] = []
+    album: list[tuple[Path, str | None]] = []
     for index, (filename, caption) in enumerate(CAR_EXAMPLES):
         sample = example_path(filename)
         if sample:
-            media.append(
-                InputMediaPhoto(
-                    media=FSInputFile(sample),
-                    caption=with_contacts(caption) if index == 0 else None,
-                )
-            )
-    if media:
-        await message.answer_media_group(media)
+            album.append((sample, with_contacts(caption) if index == 0 else None))
+    if album:
+        await media.answer_photo_album(message, album)
         return
     legacy = example_path("car.jpg")
     if legacy:
-        await message.answer_photo(FSInputFile(legacy), caption=with_contacts("Namuna"))
+        await media.answer_photo(message, legacy, caption=with_contacts("Namuna"))
 
 
 async def _finish_cars(message: Message, state: FSMContext, file_ids: list[str]) -> None:
@@ -78,7 +74,7 @@ async def _after_phone(message: Message, state: FSMContext, phone: str, full_nam
     await message.answer(apply_warning(), reply_markup=ReplyKeyboardRemove())
     voice = example_path("warning.ogg") or _voice()
     if voice:
-        await message.answer_voice(FSInputFile(voice))
+        await media.answer_voice(message, voice)
     await message.answer("Davom etish uchun tugmani bosing.", reply_markup=continue_keyboard())
 
 

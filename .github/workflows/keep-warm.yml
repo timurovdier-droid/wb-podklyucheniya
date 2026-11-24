@@ -1,0 +1,14 @@
+name: Keep webhook warm
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping webhook function
+        run: curl -fsS --max-time 30 -o /dev/null -w "%{http_code} %{time_total}s\n" https://wb-podklyucheniya.vercel.app/api/webhook

@@ -53,6 +53,7 @@ async def init() -> None:
                 """,
                 (),
             ),
+            ("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)", ()),
         ]
     )
     await _ensure_extra_columns()

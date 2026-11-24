@@ -2,8 +2,9 @@ from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile, Message
+from aiogram.types import Message
 
+from bot import media
 from bot.config import settings
 from bot.keyboards import city_keyboard, continue_keyboard, menu_keyboard, office_keyboard, phone_keyboard
 from bot.states import Flow
@@ -59,11 +60,7 @@ async def open_office(message: Message, state: FSMContext) -> None:
     photo = settings.assets_dir / "office.jpg"
     caption = office_text(city)
     if photo.exists():
-        await message.answer_photo(
-            FSInputFile(photo),
-            caption=caption,
-            reply_markup=office_keyboard(),
-        )
+        await media.answer_photo(message, photo, caption=caption, reply_markup=office_keyboard())
     else:
         await message.answer(caption, reply_markup=office_keyboard())
 
