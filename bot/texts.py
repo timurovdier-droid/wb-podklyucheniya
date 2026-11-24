@@ -57,14 +57,23 @@ def with_contacts(text: str) -> str:
 
 
 def welcome() -> str:
-    return (
-        f"<b>{escape(settings.park_name)}</b>\n"
-        "Haydovchilar uchun ariza markazi\n\n"
-        "Ulanish yoki avtomobilni brendlash bo'yicha "
-        "murojaatingizni shu yerda qoldiring.\n\n"
-        "<b>1-qadam · Shaharni tanlang</b>\n"
-        "Arizangiz tanlangan shahardagi operatorga yuboriladi."
-    )
+    lines = [
+        f"🚕 <b>{escape(settings.park_name)}</b> — rasmiy ro'yxatdan o'tish boti\n",
+        "Operatorga bormasdan, masofadan turib taksoparkimizga ulaning "
+        "yoki avtomobilingizni brendlash uchun ariza qoldiring.\n",
+        "✅ Tezkor ro'yxatdan o'tish",
+        "✅ Arizalar 24/7 qabul qilinadi\n",
+    ]
+    if settings.support_phone:
+        lines.append(f"📞 {escape(settings.support_phone)}")
+    if settings.operator_username:
+        username = escape(settings.operator_username.lstrip("@"))
+        lines.append(
+            f'👨‍💻 Savol va murojaat uchun: <a href="https://t.me/{username}">@{username}</a>'
+        )
+    lines.append("\n<b>1-qadam · Shaharni tanlang</b>")
+    lines.append("Arizangiz tanlangan shahardagi operatorga yuboriladi.")
+    return "\n".join(lines)
 
 
 def city_chosen(city: str) -> str:
