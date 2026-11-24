@@ -94,7 +94,7 @@ settings = Settings()
 def gemini_fallback_models() -> list[str]:
     raw = _text(
         "GEMINI_FALLBACK_MODELS",
-        "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-2.5-flash",
+        "gemini-3.6-flash,gemini-3.5-flash-lite",
     )
     primary = settings.gemini_model
     seen = {primary}

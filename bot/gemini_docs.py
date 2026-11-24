@@ -77,8 +77,6 @@ def _models_to_try() -> list[str]:
         if name not in seen:
             seen.add(name)
             out.append(name)
-    if _on_vercel():
-        return out[:2]
     return out
 
 
@@ -222,17 +220,27 @@ def _request_json(
     from google.genai import types
     from google.genai.errors import APIError
 
-    config = types.GenerateContentConfig(
-        thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
-        response_mime_type="application/json",
-    )
-    attempts = 2 if _on_vercel() else 4
+    rounds = 3 if _on_vercel() else 4
+    call_timeout = 15.0 if _on_vercel() else 60.0
+    models = _models_to_try()
     last_error: str | None = None
-    for model_name in _models_to_try():
-        for attempt in range(attempts):
-            if deadline is not None and time.monotonic() >= deadline:
-                log.warning("gemini %s stopped: time budget", label)
+    for attempt in range(rounds):
+        retry_models: list[str] = []
+        for model_name in models:
+            timeout = call_timeout
+            if deadline is not None:
+                timeout = min(timeout, deadline - time.monotonic())
+            if timeout < 3:
+                log.warning("gemini %s stopped: time budget (%s)", label, last_error)
                 return None
+            config = types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
+                response_mime_type="application/json",
+                http_options=types.HttpOptions(
+                    timeout=int(timeout * 1000),
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            )
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -243,19 +251,26 @@ def _request_json(
                 if parsed is not None:
                     log.info("gemini ocr ok [%s] model=%s", label, model_name)
                     return parsed
-                last_error = "empty response"
-                break
+                last_error = f"{model_name}: empty response"
+                retry_models.append(model_name)
             except APIError as exc:
                 last_error = f"{model_name}: {getattr(exc, 'message', exc)!s}"[:200]
-                if _is_retryable(exc) and attempt < attempts - 1:
-                    delay = 1 if _on_vercel() else 3 * (attempt + 1)
-                    if deadline is not None:
-                        delay = min(delay, max(0.0, deadline - time.monotonic() - 1))
-                    if delay > 0:
-                        time.sleep(delay)
-                    continue
                 log.warning("gemini %s failed: %s", label, last_error)
-                break
+                if _is_retryable(exc):
+                    retry_models.append(model_name)
+            except Exception as exc:
+                last_error = f"{model_name}: {type(exc).__name__}: {exc!s}"[:200]
+                log.warning("gemini %s failed: %s", label, last_error)
+                retry_models.append(model_name)
+        models = retry_models
+        if not models or attempt == rounds - 1:
+            break
+        delay = 2 if _on_vercel() else 3 * (attempt + 1)
+        if deadline is not None:
+            delay = min(delay, max(0.0, deadline - time.monotonic() - 1))
+        if delay > 0:
+            time.sleep(delay)
+    log.warning("gemini %s gave up: %s", label, last_error)
     return None
 
 
